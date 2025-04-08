@@ -91,6 +91,9 @@ public:
 	void setEnemiesNumber(int en) { enemiesNumber = en; }
 	int getEnemiesNumber() const { return enemiesNumber; }
 
+	void setCoinsNumber(int cn) { coinsNumber = cn; }
+	int getCoinsNumber() const { return coinsNumber; }
+
 
 
 	~GameObject() {};
@@ -135,6 +138,9 @@ public:
 	int getFieldHeight() const { return fieldHeight; }
 	void setFieldWidth(int fw) { fieldWidth = fw; }
 	void setFieldHeight(int fh) { fieldHeight = fh; }
+
+	vector<vector<CellType>> getField() const { return field; }
+
 
 	void outputField() {
 		for (int i = 0; i < fieldHeight; ++i) {
@@ -195,12 +201,18 @@ public:
 	}
 
 
+
+
 	~Field() {};
 
 };
 
 class Player : public Field
 {
+private:
+	vector<CellType> userPressedKeyList;
+	bool shieldActivated = false;
+
 public:
 
 	Player(int h, int ap, int dp, int fw, int fh)
@@ -210,6 +222,113 @@ public:
 		setAttackPower(ap);
 		setDefensePower(dp);
 		cout << "Player created with health: " << h << ", attack power: " << ap << ", defense power: " << dp << endl;
+	}
+
+	// Getters and setters for Player's private members
+	void setUserPressedKeyList(CellType pressedKey) { userPressedKeyList.push_back(pressedKey); }
+	vector<CellType>& getUserPressedKeyList() { return userPressedKeyList; }
+
+	bool getShieldActivated() { return shieldActivated; }
+	void setShieldActivated(bool activated) { shieldActivated = activated; }
+
+	
+
+
+	void handleCellEvent(int& PosX, int& PosY, char& keyValue, Field* currentField)
+	{
+		int y = PosY;
+		int x = PosX;
+		if (keyValue == 'w')
+		{
+			y--;
+		}
+		else if (keyValue == 's')
+		{
+			y++;
+		}
+		else if (keyValue == 'a')
+		{
+			x--;
+		}
+		else if (keyValue == 'd')
+		{
+			x++;
+		}
+		else
+		{
+			cout << RED << "Invalid key pressed. Please use w/a/s/d." << RESET << endl;
+			return;
+		}
+
+		// Check if the new position is within bounds
+		switch (currentField->getField()[y][x]) {
+		case EMPTY:
+			break;
+		case ENEMY:
+			if (getDefensePower() >= 3)
+			{
+				setDefensePower(getDefensePower() - 3);
+				setShieldActivated(true);
+			}
+			else setHealth(getHealth() - 1);
+			break;
+		case HP:
+			setHealth(getHealth() + 1);
+			break;
+		case HP_ITEM:
+			setDefensePower(getDefensePower() + 1);
+			break;
+		case COIN:
+			setCoinsNumber(getCoinsNumber() + 1);
+			break;
+		default:
+			break;
+		}
+	}
+
+	void writeHandledCellEvent(vector<CellType>& listOfTypes)
+
+	{
+		if (!listOfTypes.empty())
+		{
+			switch (listOfTypes[listOfTypes.size()-1]) {
+			case EMPTY:
+				cout << WHITE << "You moved to an empty cell." << RESET << endl;
+				break;
+			case ENEMY:
+				cout << RED << "You encountered an enemy!" << RESET << endl;
+				if (shieldActivated)
+				{
+					cout << GREEN << "You defended yourself with a shield! ( 3 shields are always used to protect your 1 health )" << RESET << endl;
+					setShieldActivated(false);
+				}
+				else {
+					cout << RED << "You lost 1 health! ( Not enough shields. Required 3 at least )" << RESET << endl;
+					setHealth(getHealth() - 1);
+				}
+				break;
+			case HP:
+				cout << CYAN << "You found a health item!" << RESET << endl;
+				break;
+			case HP_ITEM:
+				cout << GREEN << "You found a shield item!" << RESET << endl;
+				break;
+			case COIN:
+				cout << YELLOW << "You found a coin!" << RESET << endl;
+				break;
+			default:
+				break;
+			}
+
+			if (listOfTypes.size() > 10)
+			{
+				listOfTypes.erase(listOfTypes.begin(), listOfTypes.begin() + 9);
+			}
+		}
+		else
+		{
+			cout << "You haven't moved yet." << endl;
+		}
 	}
 
 	char getKeyPress()
@@ -233,12 +352,11 @@ public:
 
 	bool validKeyHasPressed(char& pressed)
 	{
+		pressed = tolower(pressed);
+
 		if (pressed == 'w' || pressed == 'a' || pressed == 's' || pressed == 'd')
 		{
-			return true;
-		}
-		else if (pressed == 'W' || pressed == 'A' || pressed == 'S' || pressed == 'D')
-		{
+			 // Перетворюємо на малу літеру
 			return true;
 		}
 		else if (pressed == 27) // ESC key
@@ -256,14 +374,35 @@ public:
 
 	void playerMove(int& fieldPosX, int& fieldPosY, bool& eventToContinue, Field* gameField)
 	{
+
+		cout << "🧍 Player position: (" << fieldPosX << ", " << fieldPosY << ")" << endl;
+		cout << "🗡️ Attack: " << getAttackPower() << " | 🛡️ Defense: " << getDefensePower() << endl;
+		cout << "❤️ Health: " << getHealth() << endl;
+		cout << "👾 Enemies encountered: " << getEnemiesNumber() << endl;
+		cout << "💖 HP items collected: " << getHealth() << endl;
+		cout << "💎 Coins collected: " << getCoinsNumber() << endl;
+		cout << endl;
+
+		writeHandledCellEvent(getUserPressedKeyList());
+
+		/* ---------------------------------------------------------------------------- FOR TEST ---------------------------------------------------------------------------------------- */
+
+		/*for (int i = 0; i < getUserPressedKeyList().size(); i++) cout << getUserPressedKeyList()[i] << " ";
+		cout << endl;*/
+
+		/* ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ */
+		
+
+		cout << endl << endl;
 		cout << "To move:\n  w - move up\n  s - move down\n  a - move left\n  d - move right" << endl;
 		cout << "  Press ESC to exit the game." << endl;
 		cout << "Press key: ";
+
 		char pressedKey;
 		do {
 			pressedKey = this->getKeyPress();  // Перевірка натискання клавіші
 		} while (pressedKey == '\0');
-		
+
 
 		if (pressedKey == 27) // ESC key
 		{
@@ -274,40 +413,50 @@ public:
 
 		if (validKeyHasPressed(pressedKey))
 		{
-			if (pressedKey == 'w' || pressedKey == 'W')
+			if (pressedKey == 'w')
 			{
 				if (fieldPosY > 0)
 				{
+					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
+					setUserPressedKeyList(gameField->getField()[fieldPosY - 1][fieldPosX]);
 					gameField->addElemnt(fieldPosX, fieldPosY - 1, PLAYER);
 					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
 					fieldPosY--;
+					
 				}
 			}
-			else if (pressedKey == 's' || pressedKey == 'S')
+			else if (pressedKey == 's')
 			{
 				if (fieldPosY < gameField->getFieldHeight() - 1)
 				{
+					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
+					setUserPressedKeyList(gameField->getField()[fieldPosY + 1][fieldPosX]);
 					gameField->addElemnt(fieldPosX, fieldPosY + 1, PLAYER);
 					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
 					fieldPosY++;
+					
 				}
 			}
-			else if (pressedKey == 'a' || pressedKey == 'A')
+			else if (pressedKey == 'a')
 			{
 				if (fieldPosX > 0)
 				{
+					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
+					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX - 1]);
 					gameField->addElemnt(fieldPosX - 1, fieldPosY, PLAYER);
 					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
 					fieldPosX--;
 				}
 			}
-			else if (pressedKey == 'd' || pressedKey == 'D')
+			else if (pressedKey == 'd')
 			{
 				if (fieldPosX < gameField->getFieldWidth() - 1)
 				{
+					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
+					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX + 1]);
 					gameField->addElemnt(fieldPosX + 1, fieldPosY, PLAYER);
 					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
-					fieldPosX++;
+					fieldPosX++;;
 				}
 			}
 			
@@ -352,12 +501,9 @@ int main() {
 		PLAYER_ATTACK = 3,
 		PLAYER_DEFENSE = 3,
 		NUMBER_OF_ENEMIES = 5,
-	};
-	enum GameItems {
-		COIN = 1,
-		ENEMY_NUMBER = 2,
+		NUMBER_OF_COINS = 5,
 		HP = 3,
-		HP_ITEM = 4,
+		NUMBER_OF_HP_ITEM = 4,
 	};
 
 	srand(static_cast<unsigned int>(time(0))); // Ініціалізація генератора випадкових чисел
@@ -386,9 +532,40 @@ int main() {
 	// Generate field and field items
 
 	auto XY_PositionsForUser = generateRandomPosition(field);
+
+	// User position
+
 	field->addElemnt(XY_PositionsForUser.first, XY_PositionsForUser.second, PLAYER);
 
+
+	// Generate enemies
+
+	for (int i = 0; i < NUMBER_OF_ENEMIES; ++i) {
+		auto enemyPos = generateRandomPosition(field);
+		field->addElemnt(enemyPos.first, enemyPos.second, ENEMY);
+	}
+
+	// Generate coins
+
+	for (int i = 0; i < NUMBER_OF_COINS; ++i) {
+		auto coinPos = generateRandomPosition(field);
+		field->addElemnt(coinPos.first, coinPos.second, COIN);
+	}
+
+
+	// Generate HP items
+	for (int i = 0; i < NUMBER_OF_HP_ITEM; ++i) {
+		auto hpPos = generateRandomPosition(field);
+		field->addElemnt(hpPos.first, hpPos.second, HP_ITEM);
+	}
+
 	field->outputField();
+
+
+
+
+
+	// Game process
 
 	while (gameIsOn) {
 		player->playerMove(XY_PositionsForUser.first, XY_PositionsForUser.second, gameIsOn, field);
