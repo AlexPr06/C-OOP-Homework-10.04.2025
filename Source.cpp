@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <utility>
 #include <cstdlib>
+#include <chrono>
+#include <thread>
 
 #define RED "\033[31m"
 #define GREEN "\033[32m"
@@ -28,14 +30,16 @@
 #define RESET "\033[0m"
 
 using namespace std;
+using namespace std::this_thread;     // for sleep_for
+using namespace std::chrono_literals; // for ms
 
 /*
- Створити міні гру в консолі:
-Поле 10х10
-Зарандомити айтем (коїни: 5, вороги: 5, хп: 3, захист: 3, атака: 3)
-Користувач пише в консоль w/a/s/d і цим ходить.
-Збір ітемів
-Максимально гру зробити на класах.
+Create a mini game in the console:
+10x10 field
+Randomize items (coins: 5, enemies: 5, hp: 3, defense: 3, attack: 3)
+The user writes w/a/s/d into the console and walks with it.
+Collecting items
+Use classes as much as possible.
  */
 
 enum CellType
@@ -57,6 +61,9 @@ unordered_map<string, string> emoji = {
 	{"shield", "🛡️"}
 };
 
+
+
+// GameObject class
 
 class GameObject
 {
@@ -101,7 +108,7 @@ public:
 
 
 
- // Клас для представлення ігрового поля
+// Game field class
 
 class Field : public GameObject
 {
@@ -304,7 +311,6 @@ public:
 				}
 				else {
 					cout << RED << "You lost 1 health! ( Not enough shields. Required 3 at least )" << RESET << endl;
-					setHealth(getHealth() - 1);
 				}
 				break;
 			case HP:
@@ -356,7 +362,6 @@ public:
 
 		if (pressed == 'w' || pressed == 'a' || pressed == 's' || pressed == 'd')
 		{
-			 // Перетворюємо на малу літеру
 			return true;
 		}
 		else if (pressed == 27) // ESC key
@@ -484,13 +489,15 @@ void clearConsole();
 
 void showMenu();
 
+void showGameOver();
+
 #pragma endregion
 
 
 
 
 
-// Головна функція
+
 
 int main() {
 	system("chcp 65001 > nul");
@@ -506,7 +513,7 @@ int main() {
 		NUMBER_OF_HP_ITEM = 4,
 	};
 
-	srand(static_cast<unsigned int>(time(0))); // Ініціалізація генератора випадкових чисел
+	srand(static_cast<unsigned int>(time(0))); 
 
 	showMenu();
 
@@ -569,16 +576,32 @@ int main() {
 
 	while (gameIsOn) {
 		player->playerMove(XY_PositionsForUser.first, XY_PositionsForUser.second, gameIsOn, field);
+		
+		clearConsole();
+
+		if (player->getHealth() <= 0 )
+		{
+			clearConsole();
+			showGameOver();
+			cout << RED << "You lost the game!" << RESET << endl;
+			break;
+		}
+		else if (player->getCoinsNumber() >= 5)
+		{
+			clearConsole();
+			showGameOver();
+			cout << GREEN << "You won the game!" << RESET << endl;
+			break;
+		}
 		if (gameIsOn == false)
 		{
 			clearConsole();
-			cout << MAGENTA << "Game over!" << endl << GREEN << "You successfully quited the game" << RESET << endl;
+			showGameOver();
+			cout << YELLOW << "You successfully quited the game!" << RESET << endl;
 			break;
 		}
-		clearConsole();
+
 		field->outputField();
-		//char pressedKeyInGame = _getch();
-		
 	}
 	
 
@@ -638,3 +661,32 @@ void showMenu()
 	showLanguageWarning();
 	cout << endl << endl;
 }
+
+
+void printWithDelay(const string& line, int delayMs = 0.9) {
+	for (char ch : line) {
+		cout << ch << flush;
+		sleep_for(chrono::milliseconds(delayMs));
+	}
+	cout << endl;
+}
+
+void showGameOver()
+{
+	printWithDelay(" ________  ________  _____ ______   _______           ________  ___      ___ _______   ________     ");
+	printWithDelay("|\\   ____\\|\\   __  \\|\\   _ \\  _   \\|\\  ___ \\         |\\   __  \\|\\  \\    /  /|\\  ___ \\ |\\   __  \\    ");
+	printWithDelay("\\ \\  \\___|\\ \\  \\|\\  \\ \\  \\\\__\\ \\  \\ \\   __/|        \\ \\  \\|\\  \\ \\  \\  /  / | \\   __/|\\ \\  \\|\\  \\   ");
+	printWithDelay(" \\ \\  \\  __\\ \\   __  \\ \\  \\\\|__| \\  \\ \\  \\_|/__       \\ \\  \\\\\\  \\ \\  \\/  / / \\ \\  \\_|/_\\ \\   _  _\\  ");
+	printWithDelay("  \\ \\  \\|\\  \\ \\  \\ \\  \\ \\  \\    \\ \\  \\ \\  \\_|\\ \\       \\ \\  \\\\\\  \\ \\    / /   \\ \\  \\_|\\ \\ \\  \\\\  \\| ");
+	printWithDelay("   \\ \\_______\\ \\__\\ \\__\\ \\__\\    \\ \\__\\ \\_______\\       \\ \\_______\\ \\__/ /     \\ \\_______\\ \\__\\\\ _\\ ");
+	printWithDelay("    \\|_______|\\|__|\\|__|\\|__|     \\|__|\\|_______|        \\|_______|\\|__|/       \\|_______|\\|__|\\|__|");
+	printWithDelay("░  ░  ░    ░   ▒      ░   ░ ░    ░      ░ ░ ░ ▒       ░░     ░  ░ ░ ░ ▒  ░   ▒      ░   ░ ░    ░      ░ ░");
+	printWithDelay("      ░        ░  ░         ░    ░  ░       ░ ░        ░     ░      ░ ░  ");
+	printWithDelay("                                                    ░                  ");
+	cout << endl;
+}
+
+
+                                                                                                    
+                                                                                                    
+                                                                                                    
