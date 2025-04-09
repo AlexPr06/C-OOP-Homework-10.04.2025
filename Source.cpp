@@ -603,6 +603,10 @@ int main() {
 
 		field->outputField();
 	}
+
+	delete field;
+	delete player;
+	cout << endl << BLUE << "Game ended!" << RESET << endl;
 	
 
 	return 0;
