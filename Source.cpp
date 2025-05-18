@@ -19,6 +19,14 @@
 #include <cstdlib>
 #include <chrono>
 #include <thread>
+#include <mutex>
+//#include <condition_variable>
+#include <future>
+#include "json.hpp"
+#include <fstream>
+#include <atomic>
+#include <csignal>
+
 
 #define RED "\033[31m"
 #define GREEN "\033[32m"
@@ -32,6 +40,13 @@
 using namespace std;
 using namespace std::this_thread;     // for sleep_for
 using namespace std::chrono_literals; // for ms
+using json = nlohmann::json;
+
+mutex mtx;
+atomic<bool> gameIsOn(true);
+
+
+
 
 /*
 Create a mini game in the console:
@@ -41,6 +56,7 @@ The user writes w/a/s/d into the console and walks with it.
 Collecting items
 Use classes as much as possible.
  */
+
 
 enum CellType
 {
@@ -52,6 +68,30 @@ enum CellType
 	COIN,
 	PLAYER,
 };
+
+string cellTypeToString(CellType type) {
+	switch (type) {
+	case EMPTY: return "EMPTY";
+	case NOT_EMPTY: return "NOT_EMPTY";
+	case ENEMY: return "ENEMY";
+	case HP: return "HP";
+	case HP_ITEM: return "HP_ITEM";
+	case COIN: return "COIN";
+	case PLAYER: return "PLAYER";
+	default: return "UNKNOWN";
+	}
+}
+
+CellType stringToCellType(const std::string& str) {
+	if (str == "EMPTY") return EMPTY;
+	if (str == "NOT_EMPTY") return NOT_EMPTY;
+	if (str == "ENEMY") return ENEMY;
+	if (str == "HP") return HP;
+	if (str == "HP_ITEM") return HP_ITEM;
+	if (str == "COIN") return COIN;
+	if (str == "PLAYER") return PLAYER;
+	return EMPTY; // fallback
+}
 
 unordered_map<string, string> emoji = {
 	{"player", "🧍"},
@@ -128,7 +168,7 @@ public:
 		cout << "Field created with size: " << fieldWidth << "x" << fieldHeight << endl;
 	};
 
-	void addElemnt(int x, int y, CellType type)
+	void addElement(int x, int y, CellType type)
 	{
 		if (x >= 0 && x < fieldWidth && y >= 0 && y < fieldHeight)
 		{
@@ -208,8 +248,6 @@ public:
 	}
 
 
-
-
 	~Field() {};
 
 };
@@ -229,6 +267,7 @@ public:
 		setAttackPower(ap);
 		setDefensePower(dp);
 		cout << "Player created with health: " << h << ", attack power: " << ap << ", defense power: " << dp << endl;
+	
 	}
 
 	// Getters and setters for Player's private members
@@ -272,26 +311,49 @@ public:
 		case EMPTY:
 			break;
 		case ENEMY:
-			if (getDefensePower() >= 3)
-			{
-				setDefensePower(getDefensePower() - 3);
-				setShieldActivated(true);
-			}
-			else setHealth(getHealth() - 1);
+			updatePlayerHealth(this);
 			break;
 		case HP:
-			setHealth(getHealth() + 1);
+			updateHPStatus(this);
 			break;
 		case HP_ITEM:
-			setDefensePower(getDefensePower() + 1);
+			updateDefensePower(this);
 			break;
 		case COIN:
-			setCoinsNumber(getCoinsNumber() + 1);
+			updateCoinsStatus(this);
 			break;
 		default:
 			break;
 		}
 	}
+
+	void updatePlayerHealth(Player* player)
+	{
+		lock_guard<mutex> lock(mtx);
+		if (getDefensePower() >= 3)
+		{
+			setDefensePower(getDefensePower() - 3);
+			setShieldActivated(true);
+		}
+		else setHealth(getHealth() - 1);
+	}
+
+	void updateHPStatus(Player* player) {
+		lock_guard<mutex> lock(mtx);
+		setHealth(getHealth() + 1);
+	}
+
+	void updateDefensePower(Player* player)
+	{
+		lock_guard<mutex> lock(mtx);
+		setDefensePower(getDefensePower() + 1);	
+	}
+
+	void updateCoinsStatus(Player* player)
+	{
+		lock_guard<mutex> lock(mtx);
+		setCoinsNumber(getCoinsNumber() + 1);
+	} 
 
 	void writeHandledCellEvent(vector<CellType>& listOfTypes)
 
@@ -352,7 +414,6 @@ public:
 			ch = getch();       // Читання клавіші
 			endwin();
 		#endif
-
 			return ch;
 	}
 
@@ -377,7 +438,7 @@ public:
 	}
 
 
-	void playerMove(int& fieldPosX, int& fieldPosY, bool& eventToContinue, Field* gameField)
+	void playerMove(int& fieldPosX, int& fieldPosY, atomic<bool>& eventToContinue, Field* gameField)
 	{
 
 		cout << "🧍 Player position: (" << fieldPosX << ", " << fieldPosY << ")" << endl;
@@ -424,8 +485,8 @@ public:
 				{
 					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
 					setUserPressedKeyList(gameField->getField()[fieldPosY - 1][fieldPosX]);
-					gameField->addElemnt(fieldPosX, fieldPosY - 1, PLAYER);
-					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
+					gameField->addElement(fieldPosX, fieldPosY - 1, PLAYER);
+					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
 					fieldPosY--;
 					
 				}
@@ -436,8 +497,8 @@ public:
 				{
 					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
 					setUserPressedKeyList(gameField->getField()[fieldPosY + 1][fieldPosX]);
-					gameField->addElemnt(fieldPosX, fieldPosY + 1, PLAYER);
-					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
+					gameField->addElement(fieldPosX, fieldPosY + 1, PLAYER);
+					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
 					fieldPosY++;
 					
 				}
@@ -448,8 +509,8 @@ public:
 				{
 					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
 					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX - 1]);
-					gameField->addElemnt(fieldPosX - 1, fieldPosY, PLAYER);
-					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
+					gameField->addElement(fieldPosX - 1, fieldPosY, PLAYER);
+					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
 					fieldPosX--;
 				}
 			}
@@ -459,8 +520,8 @@ public:
 				{
 					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
 					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX + 1]);
-					gameField->addElemnt(fieldPosX + 1, fieldPosY, PLAYER);
-					gameField->addElemnt(fieldPosX, fieldPosY, EMPTY);
+					gameField->addElement(fieldPosX + 1, fieldPosY, PLAYER);
+					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
 					fieldPosX++;;
 				}
 			}
@@ -471,9 +532,92 @@ public:
 
 
 
+
+	/*
+	 BACKUP with JSON 
+	*/
+	/* -------------------------------------------------------------------------------- */
+
+	json to_json() const
+	{
+		json j;
+		j["health"] = getHealth();
+		j["attackPower"] = getAttackPower();
+		j["defensePower"] = getDefensePower();
+		j["enemiesNumber"] = getEnemiesNumber();
+		j["coinsNumber"] = getCoinsNumber();
+		json fieldJson = json::array();
+		for (const auto& row : getField()) {
+			json rowJson = json::array();
+			for (const auto& cell : row) {
+				cout << cell << " ";
+				rowJson.push_back(cellTypeToString(cell));
+			}
+			fieldJson.push_back(rowJson);
+		}
+
+		j["field"] = fieldJson;
+		return j;
+	}
+
+	void from_json(const json& j)
+	{
+		setHealth(j["health"]);
+		setAttackPower(j["attackPower"]);
+		setDefensePower(j["defensePower"]);
+		setEnemiesNumber(j["enemiesNumber"]);
+		setCoinsNumber(j["coinsNumber"]);
+	}
+
+
+	/* -------------------------------------------------------------------------------- */
 	~Player()
 	{
 		cout << "Player destroyed." << endl;
+	}
+};
+
+class Backup {
+private:
+	std::string filename;
+
+public:
+	Backup(const std::string& file = "savegame.json") : filename(file) {}
+
+	template<typename T>
+	void save(const T& object) {
+		std::ofstream fileStream(filename);
+		if (fileStream.is_open()) {
+			fileStream << object.to_json().dump(4);
+			fileStream.close();
+			std::cout << "✅ Game state saved to " << filename << std::endl;
+		}
+		else {
+			std::cerr << "❌ Failed to open file for saving!" << std::endl;
+		}
+	}
+
+	template<typename T>
+	void load(T& object) {
+		std::ifstream fileStream(filename);
+		if (fileStream.is_open()) {
+			try
+			{
+				json j;
+				fileStream >> j;
+				object.from_json(j);
+				
+				std::cout << "📂 Game state loaded from " << filename << std::endl;
+			}
+			catch (const std::exception& e)
+			{
+				std::cerr << "❌ Failed to load game state: " << e.what() << std::endl;
+			}
+			fileStream.close();
+		}
+		else {
+			std::cerr << "❌ Failed to open file for loading!" << std::endl;
+		}
 	}
 };
 
@@ -497,6 +641,36 @@ void showGameOver();
 
 
 
+Player* globalPlayer = nullptr;
+/*
+	Signal handling
+ */
+void handleExitSignal(int signal) {
+	cout << "\n[!] Отримано сигнал завершення: " << signal << std::endl;
+
+	if (gameIsOn&& globalPlayer != nullptr) {
+		std::cout << "[*] Зберігаємо гру перед виходом...\n";
+		// TODO: виклик Backup::save(player);
+		Backup backup;
+		backup.save(*globalPlayer);
+	}
+
+	gameIsOn = false;
+	exit(0);
+}
+
+void setupSignalHandlers() {
+	signal(SIGINT, handleExitSignal);   // Ctrl+C
+	signal(SIGTERM, handleExitSignal);  // kill
+
+#ifndef _WIN32
+	signal(SIGQUIT, handleExitSignal);  // Ctrl+\ (тільки для Linux/macOS)
+#endif
+}
+
+
+
+
 
 
 int main() {
@@ -513,14 +687,24 @@ int main() {
 		NUMBER_OF_HP_ITEM = 4,
 	};
 
-	srand(static_cast<unsigned int>(time(0))); 
+	srand(static_cast<unsigned int>(time(0)));
 
 	showMenu();
+
+
+
+
+
 
 	// Game field creating
 	Field* field = new Field(FIELD_WIDTH, FIELD_HEIGHT);
 	// Player creating
 	Player* player = new Player(PLAYER_HEALTH, PLAYER_ATTACK, PLAYER_DEFENSE, FIELD_WIDTH, FIELD_HEIGHT);
+
+	/* -------- For backup ------------- */
+	globalPlayer = player;
+	setupSignalHandlers();
+	/* -------------- For backup ------------- */
 
 	cout << endl << endl << MAGENTA << "Game has already been rendered successfully!" << RESET << endl;
 	cout << endl << endl;
@@ -528,12 +712,11 @@ int main() {
 
 	_getch(); // Wait for user input
 
-	/*field->addElemnt(3, 3, ENEMY);*/
 
 	clearConsole();
 
 
-	bool gameIsOn = true;
+
 	cout << endl << MAGENTA << "Game started!" << RESET << endl << endl;
 
 	// Generate field and field items
@@ -542,34 +725,43 @@ int main() {
 
 	// User position
 
-	field->addElemnt(XY_PositionsForUser.first, XY_PositionsForUser.second, PLAYER);
-
+	field->addElement(XY_PositionsForUser.first, XY_PositionsForUser.second, PLAYER);
 
 	// Generate enemies
-
-	for (int i = 0; i < NUMBER_OF_ENEMIES; ++i) {
-		auto enemyPos = generateRandomPosition(field);
-		field->addElemnt(enemyPos.first, enemyPos.second, ENEMY);
-	}
+	auto enemyTask = async(launch::async, [&]()
+		{
+			for (int i = 0; i < NUMBER_OF_ENEMIES; ++i) {
+				auto enemyPos = generateRandomPosition(field);
+				field->addElement(enemyPos.first, enemyPos.second, ENEMY);
+			}
+		}
+	);
 
 	// Generate coins
-
-	for (int i = 0; i < NUMBER_OF_COINS; ++i) {
-		auto coinPos = generateRandomPosition(field);
-		field->addElemnt(coinPos.first, coinPos.second, COIN);
-	}
-
+	auto coinTask = async(launch::async, [&]()
+		{
+			for (int i = 0; i < NUMBER_OF_COINS; ++i) {
+				auto coinPos = generateRandomPosition(field);
+				field->addElement(coinPos.first, coinPos.second, COIN);
+			}
+		}
+	);
 
 	// Generate HP items
-	for (int i = 0; i < NUMBER_OF_HP_ITEM; ++i) {
-		auto hpPos = generateRandomPosition(field);
-		field->addElemnt(hpPos.first, hpPos.second, HP_ITEM);
-	}
+	auto hpTask = async(launch::async, [&]()
+		{
+			for (int i = 0; i < NUMBER_OF_HP_ITEM; ++i) {
+				auto hpPos = generateRandomPosition(field);
+				field->addElement(hpPos.first, hpPos.second, HP_ITEM);
+			}
+		}
+	);
 
+
+	enemyTask.get();
+	coinTask.get();
+	hpTask.get();
 	field->outputField();
-
-
-
 
 
 	// Game process
@@ -690,6 +882,24 @@ void showGameOver()
 	cout << endl;
 }
 
+
+
+
+
+
+/*
+Кількість айтемів:
+5 ворогів
+5 коїнів
+3 здоров'я
+2 захисту
+3 атаки
+
+Створити функцію, яка зберігає гру (усі лічильники гравця, усі позиції елементів на полі)
+Створити функцію, яка завантажує гру
+
+Користувач на початку гри вибирає, або нову гру або завантажити (якщо є)
+*/
 
                                                                                                     
                                                                                                     
