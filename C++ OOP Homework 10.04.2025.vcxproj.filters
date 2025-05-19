@@ -15,8 +15,31 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Source.cpp">
+    <ClCompile Include="source.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GAME_OBJECT.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FIELD.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="CELL_TYPE.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="COLORS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="EMOJIS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="PLAYER.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FUNCTIONS_FOR_TRANSLATION_EMOJIS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

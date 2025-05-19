@@ -1,3 +1,17 @@
+// GameObject class
+#include "GAME_OBJECT.h"
+
+// Field class
+#include "FIELD.h"
+
+
+// PLayer
+#include "PLAYER.h"
+
+
+
+
+
 #ifdef _WIN32
 #include <conio.h>
 #elif __linux__
@@ -10,572 +24,41 @@
 
 
 
-
 #include <iostream>
 #include <ctime>
-#include <vector>
-#include <unordered_map>
 #include <utility>
 #include <cstdlib>
 #include <chrono>
 #include <thread>
-#include <mutex>
 //#include <condition_variable>
 #include <future>
-#include "json.hpp"
+
 #include <fstream>
-#include <atomic>
 #include <csignal>
 
 
-#define RED "\033[31m"
-#define GREEN "\033[32m"
-#define YELLOW "\033[33m"
-#define BLUE "\033[34m"
-#define MAGENTA "\033[35m"
-#define CYAN "\033[36m"
-#define WHITE "\033[37m"
-#define RESET "\033[0m"
+
 
 using namespace std;
 using namespace std::this_thread;     // for sleep_for
 using namespace std::chrono_literals; // for ms
-using json = nlohmann::json;
 
-mutex mtx;
-atomic<bool> gameIsOn(true);
 
 
 
+///*
+//Create a mini game in the console:
+//10x10 field
+//Randomize items (coins: 5, enemies: 5, hp: 3, defense: 3, attack: 3)
+//The user writes w/a/s/d into the console and walks with it.
+//Collecting items
+//Use classes as much as possible.
+//*/
 
-/*
-Create a mini game in the console:
-10x10 field
-Randomize items (coins: 5, enemies: 5, hp: 3, defense: 3, attack: 3)
-The user writes w/a/s/d into the console and walks with it.
-Collecting items
-Use classes as much as possible.
- */
 
 
-enum CellType
-{
-	EMPTY,
-	NOT_EMPTY,
-	ENEMY,
-	HP,
-	HP_ITEM,
-	COIN,
-	PLAYER,
-};
 
-string cellTypeToString(CellType type) {
-	switch (type) {
-	case EMPTY: return "EMPTY";
-	case NOT_EMPTY: return "NOT_EMPTY";
-	case ENEMY: return "ENEMY";
-	case HP: return "HP";
-	case HP_ITEM: return "HP_ITEM";
-	case COIN: return "COIN";
-	case PLAYER: return "PLAYER";
-	default: return "UNKNOWN";
-	}
-}
 
-CellType stringToCellType(const std::string& str) {
-	if (str == "EMPTY") return EMPTY;
-	if (str == "NOT_EMPTY") return NOT_EMPTY;
-	if (str == "ENEMY") return ENEMY;
-	if (str == "HP") return HP;
-	if (str == "HP_ITEM") return HP_ITEM;
-	if (str == "COIN") return COIN;
-	if (str == "PLAYER") return PLAYER;
-	return EMPTY; // fallback
-}
-
-unordered_map<string, string> emoji = {
-	{"player", "🧍"},
-	{"coin", "🪙"},
-	{"enemy", "👾"},
-	{"hp", "❤️"},
-	{"shield", "🛡️"}
-};
-
-
-
-// GameObject class
-
-class GameObject
-{
-private:
-	int health;
-	int attackPower;
-	int defensePower;
-	int enemiesNumber;
-	int coinsNumber;
-
-public:
-	// Default values
-	GameObject() : health(0), attackPower(0), defensePower(0), enemiesNumber(0), coinsNumber(0) 
-	{};
-
-	virtual void move() = 0;
-	virtual void attack() = 0;
-	virtual void defend() = 0;
-	virtual void collectItem() = 0;
-	virtual void displayInfo() = 0;
-	
-	// Setters and getters for GameObject's private members
-	void setHealth(int h) { health = h; }
-	int getHealth() const { return health; }
-
-	void setAttackPower(int ap) { attackPower = ap; }
-	int getAttackPower() const { return attackPower; }
-
-	void setDefensePower(int dp) { defensePower = dp; }
-	int getDefensePower() const { return defensePower; }
-
-	void setEnemiesNumber(int en) { enemiesNumber = en; }
-	int getEnemiesNumber() const { return enemiesNumber; }
-
-	void setCoinsNumber(int cn) { coinsNumber = cn; }
-	int getCoinsNumber() const { return coinsNumber; }
-
-
-
-	~GameObject() {};
-};
-
-
-
-// Game field class
-
-class Field : public GameObject
-{
-private:
-	vector<vector<CellType>> field;
-	int fieldWidth;
-	int fieldHeight;
-
-public:
-	Field(int fw, int fh) : fieldWidth(fw), fieldHeight(fh)
-	{
-		for (int i = 0; i < fieldHeight; ++i)
-		{
-			vector<CellType> row(fieldWidth, EMPTY);
-			field.push_back(row);
-		}
-		cout << "Field created with size: " << fieldWidth << "x" << fieldHeight << endl;
-	};
-
-	void addElement(int x, int y, CellType type)
-	{
-		if (x >= 0 && x < fieldWidth && y >= 0 && y < fieldHeight)
-		{
-			field[y][x] = type;
-		}
-		else
-		{
-			cout << "Invalid position!" << endl;
-		}
-	}
-
-	// Getter and setter for fieldWidth and fieldHeight
-	int getFieldWidth() const { return fieldWidth; }
-	int getFieldHeight() const { return fieldHeight; }
-	void setFieldWidth(int fw) { fieldWidth = fw; }
-	void setFieldHeight(int fh) { fieldHeight = fh; }
-
-	vector<vector<CellType>> getField() const { return field; }
-
-
-	void outputField() {
-		for (int i = 0; i < fieldHeight; ++i) {
-			for (int j = 0; j < fieldWidth; ++j) {
-				switch (field[i][j]) {
-				case EMPTY:
-					cout << WHITE << "[" << "  " << "] " << RESET; // Порожня клітинка
-					break;
-				case ENEMY:
-					cout << RED  << "[" << emoji["enemy"] << "] " << RESET; // Ворог
-					break;
-				case HP:
-					cout << GREEN << "[" << emoji["hp"]  << "] " << RESET; // HP
-					break;
-				case HP_ITEM:
-					cout << GREEN << "[" << emoji["shield"] << "] " << RESET; // HP item
-					break;
-				case COIN:
-					cout << YELLOW << "[" << emoji["coin"] << "] " << RESET; // Монета
-					break;
-				case PLAYER:
-					cout << CYAN << "[" << emoji["player"] << "] " << RESET; // Гравець
-					break;
-				default:
-					break;
-				}
-			}
-			cout << endl;
-		}
-		cout << endl;
-	}
-
-	CellType getCell(int x, int y) const {
-		if (x >= 0 && x < fieldWidth && y >= 0 && y < fieldHeight) {
-			return field[y][x]; 
-		}
-		return NOT_EMPTY; 
-	}
-
-	void move() override {
-		cout << "Moving on the field." << endl;
-	}
-
-	void attack() override {
-		cout << "Attacking from the field." << endl;
-	}
-
-	void defend() override {
-		cout << "Defending on the field." << endl;
-	}
-
-	void collectItem() override {
-		cout << "Collecting item on the field." << endl;
-	}
-
-	void displayInfo() override {
-		cout << "Field size: " << fieldWidth << "x" << fieldHeight << endl;
-	}
-
-
-	~Field() {};
-
-};
-
-class Player : public Field
-{
-private:
-	vector<CellType> userPressedKeyList;
-	bool shieldActivated = false;
-
-public:
-
-	Player(int h, int ap, int dp, int fw, int fh)
-		: Field(fw, fh)  
-	{
-		setHealth(h);
-		setAttackPower(ap);
-		setDefensePower(dp);
-		cout << "Player created with health: " << h << ", attack power: " << ap << ", defense power: " << dp << endl;
-	
-	}
-
-	// Getters and setters for Player's private members
-	void setUserPressedKeyList(CellType pressedKey) { userPressedKeyList.push_back(pressedKey); }
-	vector<CellType>& getUserPressedKeyList() { return userPressedKeyList; }
-
-	bool getShieldActivated() { return shieldActivated; }
-	void setShieldActivated(bool activated) { shieldActivated = activated; }
-
-	
-
-
-	void handleCellEvent(int& PosX, int& PosY, char& keyValue, Field* currentField)
-	{
-		int y = PosY;
-		int x = PosX;
-		if (keyValue == 'w')
-		{
-			y--;
-		}
-		else if (keyValue == 's')
-		{
-			y++;
-		}
-		else if (keyValue == 'a')
-		{
-			x--;
-		}
-		else if (keyValue == 'd')
-		{
-			x++;
-		}
-		else
-		{
-			cout << RED << "Invalid key pressed. Please use w/a/s/d." << RESET << endl;
-			return;
-		}
-
-		// Check if the new position is within bounds
-		switch (currentField->getField()[y][x]) {
-		case EMPTY:
-			break;
-		case ENEMY:
-			updatePlayerHealth(this);
-			break;
-		case HP:
-			updateHPStatus(this);
-			break;
-		case HP_ITEM:
-			updateDefensePower(this);
-			break;
-		case COIN:
-			updateCoinsStatus(this);
-			break;
-		default:
-			break;
-		}
-	}
-
-	void updatePlayerHealth(Player* player)
-	{
-		lock_guard<mutex> lock(mtx);
-		if (getDefensePower() >= 3)
-		{
-			setDefensePower(getDefensePower() - 3);
-			setShieldActivated(true);
-		}
-		else setHealth(getHealth() - 1);
-	}
-
-	void updateHPStatus(Player* player) {
-		lock_guard<mutex> lock(mtx);
-		setHealth(getHealth() + 1);
-	}
-
-	void updateDefensePower(Player* player)
-	{
-		lock_guard<mutex> lock(mtx);
-		setDefensePower(getDefensePower() + 1);	
-	}
-
-	void updateCoinsStatus(Player* player)
-	{
-		lock_guard<mutex> lock(mtx);
-		setCoinsNumber(getCoinsNumber() + 1);
-	} 
-
-	void writeHandledCellEvent(vector<CellType>& listOfTypes)
-
-	{
-		if (!listOfTypes.empty())
-		{
-			switch (listOfTypes[listOfTypes.size()-1]) {
-			case EMPTY:
-				cout << WHITE << "You moved to an empty cell." << RESET << endl;
-				break;
-			case ENEMY:
-				cout << RED << "You encountered an enemy!" << RESET << endl;
-				if (shieldActivated)
-				{
-					cout << GREEN << "You defended yourself with a shield! ( 3 shields are always used to protect your 1 health )" << RESET << endl;
-					setShieldActivated(false);
-				}
-				else {
-					cout << RED << "You lost 1 health! ( Not enough shields. Required 3 at least )" << RESET << endl;
-				}
-				break;
-			case HP:
-				cout << CYAN << "You found a health item!" << RESET << endl;
-				break;
-			case HP_ITEM:
-				cout << GREEN << "You found a shield item!" << RESET << endl;
-				break;
-			case COIN:
-				cout << YELLOW << "You found a coin!" << RESET << endl;
-				break;
-			default:
-				break;
-			}
-
-			if (listOfTypes.size() > 10)
-			{
-				listOfTypes.erase(listOfTypes.begin(), listOfTypes.begin() + 9);
-			}
-		}
-		else
-		{
-			cout << "You haven't moved yet." << endl;
-		}
-	}
-
-	char getKeyPress()
-	{
-		char ch = '\0';
-
-		#ifdef _WIN32
-			if (_kbhit()) {
-				ch = _getch();  // Windows
-			}
-		#elif __linux__ || __APPLE__
-			initscr();           // Ініціалізація ncurses
-			raw();               // Вимикає буферизацію вводу
-			timeout(0);          // Функція повертає відразу без блокування
-			ch = getch();       // Читання клавіші
-			endwin();
-		#endif
-			return ch;
-	}
-
-	bool validKeyHasPressed(char& pressed)
-	{
-		pressed = tolower(pressed);
-
-		if (pressed == 'w' || pressed == 'a' || pressed == 's' || pressed == 'd')
-		{
-			return true;
-		}
-		else if (pressed == 27) // ESC key
-		{
-			cout << "Exiting game." << endl;
-			return false;
-		}
-		else
-		{
-			cout << endl << RED << "Invalid key pressed. Please use w/a/s/d. esc - exit game" << RESET<< endl;
-			return false;
-		}
-	}
-
-
-	void playerMove(int& fieldPosX, int& fieldPosY, atomic<bool>& eventToContinue, Field* gameField)
-	{
-
-		cout << "🧍 Player position: (" << fieldPosX << ", " << fieldPosY << ")" << endl;
-		cout << "🗡️ Attack: " << getAttackPower() << " | 🛡️ Defense: " << getDefensePower() << endl;
-		cout << "❤️ Health: " << getHealth() << endl;
-		cout << "👾 Enemies encountered: " << getEnemiesNumber() << endl;
-		cout << "💖 HP items collected: " << getHealth() << endl;
-		cout << "💎 Coins collected: " << getCoinsNumber() << endl;
-		cout << endl;
-
-		writeHandledCellEvent(getUserPressedKeyList());
-
-		/* ---------------------------------------------------------------------------- FOR TEST ---------------------------------------------------------------------------------------- */
-
-		/*for (int i = 0; i < getUserPressedKeyList().size(); i++) cout << getUserPressedKeyList()[i] << " ";
-		cout << endl;*/
-
-		/* ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ */
-		
-
-		cout << endl << endl;
-		cout << "To move:\n  w - move up\n  s - move down\n  a - move left\n  d - move right" << endl;
-		cout << "  Press ESC to exit the game." << endl;
-		cout << "Press key: ";
-
-		char pressedKey;
-		do {
-			pressedKey = this->getKeyPress();  // Перевірка натискання клавіші
-		} while (pressedKey == '\0');
-
-
-		if (pressedKey == 27) // ESC key
-		{
-			cout << "Exiting game..." << endl;
-			eventToContinue = false;
-			return;
-		}
-
-		if (validKeyHasPressed(pressedKey))
-		{
-			if (pressedKey == 'w')
-			{
-				if (fieldPosY > 0)
-				{
-					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
-					setUserPressedKeyList(gameField->getField()[fieldPosY - 1][fieldPosX]);
-					gameField->addElement(fieldPosX, fieldPosY - 1, PLAYER);
-					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
-					fieldPosY--;
-					
-				}
-			}
-			else if (pressedKey == 's')
-			{
-				if (fieldPosY < gameField->getFieldHeight() - 1)
-				{
-					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
-					setUserPressedKeyList(gameField->getField()[fieldPosY + 1][fieldPosX]);
-					gameField->addElement(fieldPosX, fieldPosY + 1, PLAYER);
-					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
-					fieldPosY++;
-					
-				}
-			}
-			else if (pressedKey == 'a')
-			{
-				if (fieldPosX > 0)
-				{
-					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
-					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX - 1]);
-					gameField->addElement(fieldPosX - 1, fieldPosY, PLAYER);
-					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
-					fieldPosX--;
-				}
-			}
-			else if (pressedKey == 'd')
-			{
-				if (fieldPosX < gameField->getFieldWidth() - 1)
-				{
-					handleCellEvent(fieldPosX, fieldPosY, pressedKey, gameField);
-					setUserPressedKeyList(gameField->getField()[fieldPosY][fieldPosX + 1]);
-					gameField->addElement(fieldPosX + 1, fieldPosY, PLAYER);
-					gameField->addElement(fieldPosX, fieldPosY, EMPTY);
-					fieldPosX++;;
-				}
-			}
-			
-		}
-
-	}
-
-
-
-
-	/*
-	 BACKUP with JSON 
-	*/
-	/* -------------------------------------------------------------------------------- */
-
-	json to_json() const
-	{
-		json j;
-		j["health"] = getHealth();
-		j["attackPower"] = getAttackPower();
-		j["defensePower"] = getDefensePower();
-		j["enemiesNumber"] = getEnemiesNumber();
-		j["coinsNumber"] = getCoinsNumber();
-		json fieldJson = json::array();
-		for (const auto& row : getField()) {
-			json rowJson = json::array();
-			for (const auto& cell : row) {
-				cout << cell << " ";
-				rowJson.push_back(cellTypeToString(cell));
-			}
-			fieldJson.push_back(rowJson);
-		}
-
-		j["field"] = fieldJson;
-		return j;
-	}
-
-	void from_json(const json& j)
-	{
-		setHealth(j["health"]);
-		setAttackPower(j["attackPower"]);
-		setDefensePower(j["defensePower"]);
-		setEnemiesNumber(j["enemiesNumber"]);
-		setCoinsNumber(j["coinsNumber"]);
-	}
-
-
-	/* -------------------------------------------------------------------------------- */
-	~Player()
-	{
-		cout << "Player destroyed." << endl;
-	}
-};
 
 class Backup {
 private:
@@ -586,7 +69,8 @@ public:
 
 	template<typename T>
 	void save(const T& object) {
-		std::ofstream fileStream(filename);
+		// Append to the file
+		std::ofstream fileStream(filename, std::ios::app);
 		if (fileStream.is_open()) {
 			fileStream << object.to_json().dump(4);
 			fileStream.close();
@@ -603,7 +87,7 @@ public:
 		if (fileStream.is_open()) {
 			try
 			{
-				json j;
+				nlohmann::json j;
 				fileStream >> j;
 				object.from_json(j);
 				
@@ -642,17 +126,27 @@ void showGameOver();
 
 
 Player* globalPlayer = nullptr;
+Field* globalField = nullptr;
 /*
 	Signal handling
  */
 void handleExitSignal(int signal) {
 	cout << "\n[!] Отримано сигнал завершення: " << signal << std::endl;
 
-	if (gameIsOn&& globalPlayer != nullptr) {
+	if (gameIsOn&& globalPlayer != nullptr && globalField != nullptr) {
 		std::cout << "[*] Зберігаємо гру перед виходом...\n";
 		// TODO: виклик Backup::save(player);
 		Backup backup;
+		// Clear the file before writing
+		std::ofstream file("savegame.json", std::ios::trunc);
+
+		if (file.is_open()) {
+			file.close();
+		}
+
 		backup.save(*globalPlayer);
+		backup.save(*globalField);
+
 	}
 
 	gameIsOn = false;
@@ -691,11 +185,6 @@ int main() {
 
 	showMenu();
 
-
-
-
-
-
 	// Game field creating
 	Field* field = new Field(FIELD_WIDTH, FIELD_HEIGHT);
 	// Player creating
@@ -703,6 +192,7 @@ int main() {
 
 	/* -------- For backup ------------- */
 	globalPlayer = player;
+	globalField = field;
 	setupSignalHandlers();
 	/* -------------- For backup ------------- */
 
@@ -778,7 +268,7 @@ int main() {
 			cout << RED << "You lost the game!" << RESET << endl;
 			break;
 		}
-		else if (player->getCoinsNumber() >= 5)
+		if (player->getCoinsNumber() >= 5)
 		{
 			clearConsole();
 			showGameOver();
@@ -803,6 +293,16 @@ int main() {
 
 	return 0;
 }
+
+
+
+
+
+
+
+
+
+
 
 pair<int, int> generateRandomPosition(Field* currentField) {
 	int x, y;
